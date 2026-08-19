@@ -1,0 +1,19 @@
+services:
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: heart-disease-api
+    ports:
+      - "8000:8000"
+
+  ui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ui
+    container_name: heart-disease-ui
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
