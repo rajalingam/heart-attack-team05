@@ -5,3 +5,4 @@ boto3
 pandas
 requests
 pydantic
+pytest
