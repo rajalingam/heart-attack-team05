@@ -57,3 +57,25 @@ jobs:
           docker build \
             -f docker/Dockerfile.ui \
             -t heart-disease-ui:latest .
+
+- name: Configure AWS credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: ${{ vars.AWS_GITHUB_ROLE }}
+    aws-region: ${{ vars.AWS_REGION }}
+
+- name: Login to ECR
+  id: login-ecr
+  uses: aws-actions/amazon-ecr-login@v2
+
+- name: Build and push API
+  env:
+    REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+    IMAGE_TAG: ${{ github.sha }}
+  run: |
+    docker build \
+      -f docker/Dockerfile.api \
+      -t $REGISTRY/heart-disease-api:$IMAGE_TAG .
+
+    docker push \
+      $REGISTRY/heart-disease-api:$IMAGE_TAG
