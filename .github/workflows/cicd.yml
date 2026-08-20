@@ -40,7 +40,7 @@ jobs:
     needs: test
     permissions:
       id-token: write
-      content: read
+      contents: read
 
     steps:
 
