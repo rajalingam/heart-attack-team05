@@ -33,3 +33,27 @@ jobs:
       - name: Run tests
         run: |
           pytest
+
+  docker-build:
+
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+
+    needs: test
+
+    steps:
+
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Build API image
+        run: |
+          docker build \
+            -f docker/Dockerfile.api \
+            -t heart-disease-api:latest .
+
+      - name: Build UI image
+        run: |
+          docker build \
+            -f docker/Dockerfile.ui \
+            -t heart-disease-ui:latest .
