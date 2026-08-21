@@ -27,3 +27,5 @@ jobs:
         with:
           aws-region: ap-southeast-1
           role-to-assume: arn:aws:iam::094230409700:role/git-hub-access
+      - name: Test AWS Credentials
+        run: aws sts get-caller-identity    
