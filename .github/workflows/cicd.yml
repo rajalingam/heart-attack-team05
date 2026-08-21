@@ -1,7 +1,9 @@
-name: Heart Disease OIDC Debug
+name: Heart Disease CI/CD
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   id-token: write
@@ -9,43 +11,22 @@ permissions:
 
 jobs:
 
-  oidc-debug:
-    name: Debug OIDC Token
+  
+
+  oidc-test:
     runs-on: ubuntu-latest
 
     steps:
 
-      - name: Request OIDC token
-        id: oidc
-        run: |
-          RESPONSE=$(curl -sSL \
-            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com")
+      - name: Checkout source
+        uses: actions/checkout@v4
 
-          echo "$RESPONSE" > oidc-response.json
+      - name: configure AWS Credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v4.1.0
+        with:
+          aws-region: ap-southeast-1
+          role-to-assume: arn:aws:iam::094230409700:role/git-hub-access
+      - name: Test AWS Credentials
+        run: aws sts get-caller-identity    
 
-          echo "OIDC response received"
 
-          TOKEN=$(echo "$RESPONSE" | jq -r '.value')
-
-          if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
-            echo "Failed to obtain OIDC token"
-            exit 1
-          fi
-
-          echo "OIDC token obtained successfully"
-
-          PAYLOAD=$(echo "$TOKEN" | cut -d '.' -f 2)
-
-          # Decode JWT payload
-          echo "$PAYLOAD" | base64 -d 2>/dev/null | jq '{
-            iss,
-            sub,
-            aud,
-            repository,
-            repository_owner,
-            repository_id,
-            repository_owner_id,
-            ref,
-            event_name
-          }'
