@@ -22,7 +22,7 @@ jobs:
       - name: configure AWS Credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v4.1.0
         with:
-          aws-region: ap-south-1
+          aws-region: ap-southeast-1
           role-to-assume: arn:aws:iam::094230409700:role/git-hub-access
       - name: Test AWS Credentials
         run: aws sts get-caller-identity    
