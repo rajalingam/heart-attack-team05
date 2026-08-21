@@ -100,7 +100,7 @@ jobs:
       - name: Build and push API image
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: latest
 
         run: |
 
@@ -119,7 +119,7 @@ jobs:
       - name: Build and push UI image
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: latest
 
         run: |
 
