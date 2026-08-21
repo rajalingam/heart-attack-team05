@@ -11,6 +11,13 @@ permissions:
 
 jobs:
 
+  oidc-debug:
+    runs-on: ubuntu-latest
+
+    steps:
+      -name: Debug PIDC token
+      uses: github/actions-oidc-debugger@main
+
   oidc-test:
     runs-on: ubuntu-latest
 
