@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      -name: Debug PIDC token
-      uses: github/actions-oidc-debugger@main
+      - name: Debug PIDC token
+        uses: github/actions-oidc-debugger@main
 
   oidc-test:
     runs-on: ubuntu-latest
