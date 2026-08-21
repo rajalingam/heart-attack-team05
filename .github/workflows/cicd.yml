@@ -11,14 +11,15 @@ permissions:
 
 env:
   AWS_REGION: ap-southeast-1
+
   API_ECR_REPOSITORY: heart-disease-api
   UI_ECR_REPOSITORY: heart-disease-ui
 
 jobs:
 
-  # ==========================================
-  # 1. RUN TESTS
-  # ==========================================
+  # =====================================================
+  # 1. TEST
+  # =====================================================
 
   test:
     name: Run Tests
@@ -44,9 +45,9 @@ jobs:
           pytest
 
 
-  # ==========================================
+  # =====================================================
   # 2. BUILD AND PUSH DOCKER IMAGES
-  # ==========================================
+  # =====================================================
 
   docker-build-push:
     name: Build and Push Docker Images
@@ -58,15 +59,18 @@ jobs:
       id-token: write
       contents: read
 
+    outputs:
+      registry: ${{ steps.login-ecr.outputs.registry }}
+
     steps:
 
       - name: Checkout source
         uses: actions/checkout@v4
 
 
-      # ----------------------------------------
-      # AWS Authentication
-      # ----------------------------------------
+      # -------------------------------------------------
+      # AWS OIDC
+      # -------------------------------------------------
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4.1.0
@@ -75,57 +79,276 @@ jobs:
           role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
 
 
-      # ----------------------------------------
+      # -------------------------------------------------
       # Verify AWS
-      # ----------------------------------------
+      # -------------------------------------------------
 
       - name: Verify AWS identity
         run: |
           aws sts get-caller-identity
 
 
-      # ----------------------------------------
+      # -------------------------------------------------
       # Login to ECR
-      # ----------------------------------------
+      # -------------------------------------------------
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
 
-      # ----------------------------------------
-      # Build and Push API
-      # ----------------------------------------
+      # -------------------------------------------------
+      # Build API
+      # -------------------------------------------------
 
-      - name: Build and push API image
+      - name: Build API Docker image
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: latest
+          IMAGE_TAG: ${{ github.sha }}
 
         run: |
-
           docker build \
             -f docker/Dockerfile.api \
-            -t $REGISTRY/$API_ECR_REPOSITORY:$IMAGE_TAG .
+            -t $REGISTRY/$API_ECR_REPOSITORY:$IMAGE_TAG \
+            .
 
+
+      # -------------------------------------------------
+      # Push API
+      # -------------------------------------------------
+
+      - name: Push API Docker image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+
+        run: |
           docker push \
             $REGISTRY/$API_ECR_REPOSITORY:$IMAGE_TAG
 
 
-      # ----------------------------------------
-      # Build and Push UI
-      # ----------------------------------------
+      # -------------------------------------------------
+      # Build UI
+      # -------------------------------------------------
 
-      - name: Build and push UI image
+      - name: Build UI Docker image
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: latest
+          IMAGE_TAG: ${{ github.sha }}
+
+        run: |
+          docker build \
+            -f docker/Dockerfile.ui \
+            -t $REGISTRY/$UI_ECR_REPOSITORY:$IMAGE_TAG \
+            .
+
+
+      # -------------------------------------------------
+      # Push UI
+      # -------------------------------------------------
+
+      - name: Push UI Docker image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+
+        run: |
+          docker push \
+            $REGISTRY/$UI_ECR_REPOSITORY:$IMAGE_TAG
+
+
+  # =====================================================
+  # 3. DEPLOY TO EC2
+  # =====================================================
+
+  deploy-ec2:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+
+    needs: docker-build-push
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.1.0
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
+
+
+      # -------------------------------------------------
+      # Get ECR Registry
+      # -------------------------------------------------
+
+      - name: Get ECR registry
+        id: ecr
+        run: |
+          REGISTRY=$(aws sts get-caller-identity \
+            --query Account \
+            --output text).dkr.ecr.${AWS_REGION}.amazonaws.com
+
+          echo "registry=$REGISTRY" >> "$GITHUB_OUTPUT"
+
+
+      # -------------------------------------------------
+      # Setup SSH
+      # -------------------------------------------------
+
+      - name: Setup SSH key
+        run: |
+
+          mkdir -p ~/.ssh
+
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
+
+          chmod 600 ~/.ssh/ec2_key
+
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+
+      # -------------------------------------------------
+      # Deploy to EC2
+      # -------------------------------------------------
+
+      - name: Deploy application to EC2
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
 
         run: |
 
-          docker build \
-            -f docker/Dockerfile.ui \
-            -t $REGISTRY/$UI_ECR_REPOSITORY:$IMAGE_TAG .
+          ssh \
+            -i ~/.ssh/ec2_key \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            "REGISTRY='$REGISTRY' IMAGE_TAG='$IMAGE_TAG' AWS_REGION='$AWS_REGION' bash -s" << 'EOF'
 
-          docker push \
-            $REGISTRY/$UI_ECR_REPOSITORY:$IMAGE_TAG
+          set -e
+
+          echo "========================================"
+          echo "Starting deployment"
+          echo "========================================"
+
+          echo "Image tag:"
+          echo "$IMAGE_TAG"
+
+          echo "ECR Registry:"
+          echo "$REGISTRY"
+
+
+          # --------------------------------------------
+          # Login to ECR
+          # --------------------------------------------
+
+          echo "Logging into ECR..."
+
+          aws ecr get-login-password \
+            --region "$AWS_REGION" | \
+            docker login \
+            --username AWS \
+            --password-stdin "$REGISTRY"
+
+
+          # --------------------------------------------
+          # Pull API image
+          # --------------------------------------------
+
+          echo "Pulling API image..."
+
+          docker pull \
+            "$REGISTRY/heart-disease-api:$IMAGE_TAG"
+
+
+          # --------------------------------------------
+          # Pull UI image
+          # --------------------------------------------
+
+          echo "Pulling UI image..."
+
+          docker pull \
+            "$REGISTRY/heart-disease-ui:$IMAGE_TAG"
+
+
+          # --------------------------------------------
+          # Create Docker network
+          # --------------------------------------------
+
+          echo "Creating Docker network..."
+
+          docker network create heart-disease-network \
+            2>/dev/null || true
+
+
+          # --------------------------------------------
+          # Stop old API container
+          # --------------------------------------------
+
+          echo "Stopping old API container..."
+
+          docker stop heart-disease-api \
+            2>/dev/null || true
+
+          docker rm heart-disease-api \
+            2>/dev/null || true
+
+
+          # --------------------------------------------
+          # Stop old UI container
+          # --------------------------------------------
+
+          echo "Stopping old UI container..."
+
+          docker stop heart-disease-ui \
+            2>/dev/null || true
+
+          docker rm heart-disease-ui \
+            2>/dev/null || true
+
+
+          # --------------------------------------------
+          # Start API
+          # --------------------------------------------
+
+          echo "Starting API..."
+
+          docker run -d \
+            --name heart-disease-api \
+            --restart unless-stopped \
+            --network heart-disease-network \
+            -p 8000:8000 \
+            "$REGISTRY/heart-disease-api:$IMAGE_TAG"
+
+
+          # --------------------------------------------
+          # Start UI
+          # --------------------------------------------
+
+          echo "Starting UI..."
+
+          docker run -d \
+            --name heart-disease-ui \
+            --restart unless-stopped \
+            --network heart-disease-network \
+            -p 8501:8501 \
+            "$REGISTRY/heart-disease-ui:$IMAGE_TAG"
+
+
+          # --------------------------------------------
+          # Show running containers
+          # --------------------------------------------
+
+          echo "========================================"
+          echo "Running containers"
+          echo "========================================"
+
+          docker ps
+
+
+          echo "========================================"
+          echo "Deployment completed"
+          echo "========================================"
+
+          

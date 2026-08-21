@@ -6,7 +6,7 @@ import requests
 # Configuration
 # ============================================================
 
-API_URL = "http://localhost:8000/predict"
+API_URL = "http://heart-disease-api:8000/predict"
 
 
 # ============================================================
