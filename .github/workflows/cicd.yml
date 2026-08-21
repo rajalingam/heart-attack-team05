@@ -1,9 +1,7 @@
-name: Heart Disease CI/CD
+name: Heart Disease OIDC Debug
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -12,26 +10,42 @@ permissions:
 jobs:
 
   oidc-debug:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Debug PIDC token
-        uses: github/actions-oidc-debugger@main
-
-  oidc-test:
+    name: Debug OIDC Token
     runs-on: ubuntu-latest
 
     steps:
 
-      - name: Checkout source
-        uses: actions/checkout@v4
+      - name: Request OIDC token
+        id: oidc
+        run: |
+          RESPONSE=$(curl -sSL \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com")
 
-      - name: configure AWS Credentials using OIDC
-        uses: aws-actions/configure-aws-credentials@v4.1.0
-        with:
-          aws-region: ap-southeast-1
-          role-to-assume: arn:aws:iam::094230409700:role/git-hub-access
-      - name: Test AWS Credentials
-        run: aws sts get-caller-identity    
+          echo "$RESPONSE" > oidc-response.json
 
+          echo "OIDC response received"
 
+          TOKEN=$(echo "$RESPONSE" | jq -r '.value')
+
+          if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
+            echo "Failed to obtain OIDC token"
+            exit 1
+          fi
+
+          echo "OIDC token obtained successfully"
+
+          PAYLOAD=$(echo "$TOKEN" | cut -d '.' -f 2)
+
+          # Decode JWT payload
+          echo "$PAYLOAD" | base64 -d 2>/dev/null | jq '{
+            iss,
+            sub,
+            aud,
+            repository,
+            repository_owner,
+            repository_id,
+            repository_owner_id,
+            ref,
+            event_name
+          }'
