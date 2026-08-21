@@ -26,6 +26,6 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4.1.0
         with:
           aws-region: ap-southeast-1
-          role-to-assume: arn:aws:iam::094230409700:role/git-hub-access
+          role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
       - name: Test AWS Credentials
         run: aws sts get-caller-identity    
