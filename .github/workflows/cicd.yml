@@ -21,7 +21,7 @@ jobs:
   # 1. TEST
   # =====================================================
 
-  Cheeck_out_and_Unite-Test:
+  Cheeck_out_and_Unit_Test:
     name: Run Tests
     runs-on: ubuntu-latest
 
@@ -53,7 +53,7 @@ jobs:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
 
-    needs: test
+    needs: heeck_out_and_Unit_Test
 
     permissions:
       id-token: write
