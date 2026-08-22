@@ -22,7 +22,7 @@ jobs:
   # =====================================================
 
   Check_out_and_Unit_Test:
-    name: Run Tests
+    name: Checkout And  Unit Tests
     runs-on: ubuntu-latest
 
     steps:
