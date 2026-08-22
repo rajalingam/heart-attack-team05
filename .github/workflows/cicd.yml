@@ -21,7 +21,7 @@ jobs:
   # 1. TEST
   # =====================================================
 
-  Cheeck-out & Unite-Test:
+  Cheeck_out_and_Unite-Test:
     name: Run Tests
     runs-on: ubuntu-latest
 
