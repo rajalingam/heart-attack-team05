@@ -1,4 +1,5 @@
 import streamlit as st
+import json
 import requests
 
 
@@ -7,6 +8,7 @@ import requests
 # ============================================================
 
 API_URL = "http://heart-disease-api:8000/predict"
+#API_URL = "http://localhost:8000/predict"
 
 
 # ============================================================
@@ -557,24 +559,52 @@ if predict_button:
             )
 
             if response.status_code == 200:
-
                 result = response.json()
+                prediction = result.get("prediction")
+                if isinstance(prediction, str):
+                    prediction = json.loads(prediction)
 
-                st.success(
-                    "Prediction completed successfully!"
+                association_score = prediction.get("association_score", 0)
+                threshold = prediction.get("threshold", 0)
+                positive_class = prediction.get("positive_class", False)
+                classification = prediction.get("classification", "")
+                disclaimer = prediction.get("disclaimer", "")
+                model_endpoint = result.get("model_endpoint", "")
+                latency_ms = result.get("latency_ms", 0)
+
+                st.subheader("❤️ Heart Attack Association Result")
+
+                if positive_class:
+                    st.error("⚠️ Higher Association")
+                else:
+                    st.success("✓ Lower Association")
+
+                st.markdown(f"### Result\n\n**{classification}**")
+
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Association Score", f"{association_score:.2%}")
+                with col2:
+                    st.metric("Threshold", f"{threshold:.0%}")
+                with col3:
+                    st.metric("Response Time", f"{latency_ms / 1000:.2f} sec")
+
+                st.info(
+                    "The association score indicates how similar the submitted "
+                    "information is to patterns observed in the training data."
                 )
+                st.warning(f"⚠️ **Important:** {disclaimer}")
 
-                st.divider()
-
-                st.header("❤️ Prediction Result")
-
-                st.json(result)
-
+                with st.expander("Technical Details"):
+                    st.write(f"**Model Endpoint:** {model_endpoint}")
+                    st.write(f"**Positive Class:** {positive_class}")
+                    st.write(f"**Model Threshold:** {threshold}")
             else:
-
-                st.error(
-                    f"Prediction failed: {response.text}"
-                )
+                st.error(f"Prediction service returned HTTP {response.status_code}")
+                try:
+                    st.json(response.json())
+                except ValueError:
+                    st.text(response.text)
 
         except requests.exceptions.RequestException as e:
 

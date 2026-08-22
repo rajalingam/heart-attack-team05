@@ -4,6 +4,7 @@ import boto3
 import json
 import os
 import time
+import requests
 
 app = FastAPI(
     title="Heart Disease Prediction API",
@@ -103,6 +104,12 @@ def health_check():
 @app.post("/predict")
 def predict(request: HeartDiseaseRequest):
 
+    url = "https://hardened-triceps-handbook.ngrok-free.dev/predict"
+    headers = {
+        "x-api-key": "team05-demo-key",
+        "Content-Type": "application/json"
+    }
+
     try:
 
         start_time = time.time()
@@ -111,13 +118,18 @@ def predict(request: HeartDiseaseRequest):
         payload = request.model_dump()
 
         # Send to SageMaker
-        response = runtime.invoke_endpoint(
-            EndpointName=ENDPOINT_NAME,
-            ContentType="application/json",
-            Body=json.dumps(payload)
-        )
+        #response = runtime.invoke_endpoint(
+        #    EndpointName=ENDPOINT_NAME,
+        #    ContentType="application/json",
+        #    Body=json.dumps(payload)
+        #)
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
+       # print(response.status_code)
+       # print(response.text)
 
-        result = response["Body"].read().decode("utf-8")
+
+       # result = response["Body"].read().decode("utf-8")
 
         latency = round(
             (time.time() - start_time) * 1000,
@@ -125,7 +137,7 @@ def predict(request: HeartDiseaseRequest):
         )
 
         return {
-            "prediction": result,
+            "prediction": response.text,
             "model_endpoint": ENDPOINT_NAME,
             "latency_ms": latency
         }
